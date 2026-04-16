@@ -1,19 +1,26 @@
 'use client';
-import { useEffect, useState, useRef, useMemo } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { useEffect, useState, useRef } from 'react';
+import { createClient } from '@/utils/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ChatInterface({ connectionId, currentUserId }: { connectionId: string, currentUserId: string }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
-  const supabase = useMemo(() => createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mock.supabase.co',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'mock-key'
-  ), []);
+  const supabase = createClient();
   const endRef = useRef<HTMLDivElement>(null);
 
+  // Load initial messages and subscribe to realtime
   useEffect(() => {
-    // Note: To see realtime in action, ensure Supabase realizes you are authenticated.
+    async function loadMessages() {
+      const { data } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('connection_id', connectionId)
+        .order('created_at', { ascending: true });
+      if (data) setMessages(data);
+    }
+    loadMessages();
+
     const channel = supabase
       .channel(`chat_${connectionId}`)
       .on('postgres_changes', 
@@ -33,14 +40,14 @@ export default function ChatInterface({ connectionId, currentUserId }: { connect
     if (!input.trim()) return;
     
     // Optimistic UI insert
-    const tempMsg = { id: Date.now().toString(), sender_id: currentUserId, content: input };
+    const tempMsg = { id: Date.now().toString(), sender_id: currentUserId, text: input };
     setMessages(prev => [...prev, tempMsg]);
     setInput('');
 
     await supabase.from('messages').insert({
       connection_id: connectionId,
       sender_id: currentUserId,
-      content: input
+      text: input
     });
   };
 
@@ -50,7 +57,7 @@ export default function ChatInterface({ connectionId, currentUserId }: { connect
       <div className="flex items-center justify-between p-5 border-b border-white/10 bg-white/5 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="h-3 w-3 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
-          <h3 className="font-bold text-white tracking-wide">Chat with Sarah</h3>
+          <h3 className="font-bold text-white tracking-wide">Live Chat</h3>
         </div>
         
         <button className="rounded-full bg-indigo-500/10 border border-indigo-400/20 px-5 py-2.5 text-xs font-bold text-indigo-300 transition-all hover:bg-indigo-500/20 hover:shadow-[0_0_20px_rgba(99,102,241,0.25)] relative overflow-hidden group tracking-wider uppercase">
@@ -81,7 +88,7 @@ export default function ChatInterface({ connectionId, currentUserId }: { connect
                     ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-br-sm border border-indigo-400/30' 
                     : 'bg-white/10 text-white/90 rounded-bl-sm border border-white/10'
                 }`}>
-                  {msg.content}
+                  {msg.text}
                 </div>
               </motion.div>
             );

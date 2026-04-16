@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import TopNav from "@/components/TopNav";
+import FluidBackground from "@/components/FluidBackground";
+import { GlobalStateProvider } from "@/components/GlobalStateProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,12 +28,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full`}>
-      <body className="min-h-full flex flex-col antialiased bg-white dark:bg-black text-slate-900 dark:text-white transition-colors">
+      <body className="min-h-full flex flex-col antialiased bg-transparent text-slate-900 dark:text-white transition-colors relative">
+        <FluidBackground />
         <ThemeProvider attribute="class" defaultTheme="dark">
-          <TopNav />
-          <main className="flex-1 mt-20">
-            {children}
-          </main>
+          <GlobalStateProvider>
+            <main className="flex-1 relative z-10 block">
+              {children}
+            </main>
+          </GlobalStateProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -1,20 +1,62 @@
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import GlassUserCard from '@/components/ui/GlassUserCard';
+import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 
 export default function OnboardingFlow() {
+  const router = useRouter();
   const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [userState, setUserState] = useState({
     username: '',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100&h=100', // Default starter avatar
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100&h=100',
     rating: 5.0,
     teaching: [] as string[],
     learning: [] as string[]
   });
   
   const [tempSkill, setTempSkill] = useState('');
+  const supabase = createClient();
+
+  const handleComplete = async () => {
+    try {
+      setLoading(true);
+
+      // 1. Explicitly fetch the current authenticated user first
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      // 2. Catch the missing user instantly before hitting the database
+      if (authError || !user) {
+        throw new Error("No user found. Your login session may have expired.");
+      }
+
+      // 3. Now perform your database insert, making sure to use the user.id
+      const { error: dbError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id, // CRITICAL: This links the profile row to the Auth user
+          username: userState.username,
+          avatar_url: userState.avatar,
+          skills_have: userState.teaching,
+          skills_want: userState.learning,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (dbError) throw dbError;
+
+      // 4. Success! Route to Phase 2.
+      router.push('/dashboard');
+
+    } catch (error: any) {
+      console.error('Error saving profile:', error.message);
+      alert('Error saving profile: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const nextStep = () => setStep(s => Math.min(s + 1, 3));
   const prevStep = () => setStep(s => Math.max(s - 1, 1));
@@ -170,12 +212,20 @@ export default function OnboardingFlow() {
               Continue →
             </button>
           ) : (
-            <Link 
-              href="/dashboard"
-              className="px-8 py-3 rounded-full bg-indigo-600 text-white text-sm font-bold shadow-[0_0_20px_rgba(79,70,229,0.5)] hover:bg-indigo-500 hover:scale-105 active:scale-95 transition-all"
+            <button 
+              onClick={handleComplete}
+              disabled={loading || !userState.username}
+              className="px-8 py-3 rounded-full bg-indigo-600 text-white text-sm font-bold shadow-[0_0_20px_rgba(79,70,229,0.5)] hover:bg-indigo-500 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              Complete Setup
-            </Link>
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Complete Setup'
+              )}
+            </button>
           )}
         </div>
       </div>
